@@ -1,0 +1,29 @@
+
+
+# JetBrains IDEs
+.idea/
+
+# Go binary output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+go_zig/
+explore/
+/weather-service
+bin/
+
+# Go test binary
+*.test
+
+# Go coverage output
+*.out
+
+# Go vendor directory
+vendor/
+
+# Environment
+.env
+.envrc

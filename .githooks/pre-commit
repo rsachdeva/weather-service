@@ -1,0 +1,25 @@
+#!/bin/sh
+#export PATH="$HOME/go-versions/go1.26.2/bin:$PATH"
+go version
+
+GO_MINOR=$(go version | grep -oE 'go1\.[0-9]+' | grep -oE '[0-9]+$')
+if [ -z "$GO_MINOR" ] || [ "$GO_MINOR" -lt 26 ]; then
+    echo "Go 1.26+ required, found: $(go version)"
+    exit 1
+fi
+
+echo "Running Go fix diff, fmt check, and lint"
+
+if [ -z "$(find . -name '*.go' -not -path './.git/*')" ]; then
+    echo "No Go source files found, skipping."
+    exit 0
+fi
+
+go fix -diff ./... || exit 1
+fmt_diff=$(gofmt -d $(find . -name '*.go' -not -path './.git/*'))
+if [ -n "$fmt_diff" ]; then
+    echo "run go fmt ./... (formatting diff:)"
+    echo "$fmt_diff"
+    exit 1
+fi
+go tool golangci-lint run ./...
