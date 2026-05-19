@@ -27,3 +27,5 @@ vendor/
 # Environment
 .env
 .envrc
+
+keys.json

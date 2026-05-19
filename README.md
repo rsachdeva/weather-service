@@ -112,8 +112,6 @@ make fix-diff   # show go fix changes
 make lint       # golangci-lint
 ```
 
-## Prod Improvements
+## Status
 
-- [ ] Using `slog` for now: Forward `slog` JSON stdout to Datadog Logs or Grafana/Loki (needs log agent: Datadog Agent).
-- [ ] Using chi `RequestID` for now: replace with `dd-trace-go` to stamp `dd.trace_id` on log lines and link them to Datadog APM traces.
-- [ ] Caching: two-TTL cache for NWS responses (points: 24h, forecast: 1h) backed by Redis to reduce latency and upstream calls.
+Version 0.1 — work in progress.
