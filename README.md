@@ -4,7 +4,7 @@ HTTP server that returns the current forecast and temperature classification for
 
 ## Requirements
 
-- Go 1.26+ — install from https://go.dev/dl/
+- Go 1.27+ — install from https://go.dev/dl/
 
 ## Build check
 
@@ -17,6 +17,15 @@ make build-check
 ```sh
 make test
 ```
+
+`internal/api` and `internal/routes` use **mocks**: `.On(...)`, `.Once()`, and `AssertExpectations` check that the forecaster was called as expected. `internal/nws` uses a **stub** — it replays fixed responses, and the checks are on the decoded `*forecast.Forecast`.
+
+### Fixtures
+
+Captured NWS responses live in `internal/nws/testdata/`, embedded with `//go:embed`.
+
+- Payloads are served as **raw bytes**, never marshalled from `pointsResponse`/`forecastResponse`. Encoding with the same structs the client decodes into would let a wrong `json` tag agree with itself and pass.
+- `fetch` duplicates its status and decode handling across a debug branch (buffers the body) and an info branch (streams it), so `TestGetForecast_Errors` runs every case at both `slog.LevelInfo` and `slog.LevelDebug`.
 
 ## Run
 
@@ -114,4 +123,4 @@ make lint       # golangci-lint
 
 ## Status
 
-Version 0.1 — work in progress.
+Version 0.3 — work in progress.

@@ -1,10 +1,34 @@
 #!/bin/sh
-#export PATH="$HOME/go-versions/go1.26.2/bin:$PATH"
+
+# Git runs hooks with a bare environment: it sources no shell rc files, and direnv's
+# hook only fires for interactive shells. So this repo's .envrc never reaches us, and
+# committing from GoLand or a non-direnv shell leaves `go` unfindable. Recover the
+# toolchain from .envrc rather than hardcoding a path here, so a version bump only has
+# to be made in one place.
+if ! command -v go >/dev/null 2>&1; then
+    envrc="$(git rev-parse --show-toplevel)/.envrc"
+    if [ -f "$envrc" ]; then
+        goroot=$(sed -n 's/^[[:space:]]*export GOROOT="\([^"]*\)".*/\1/p' "$envrc" | tail -1)
+        goroot=$(printf '%s' "$goroot" | sed "s|\${HOME}|$HOME|g; s|\$HOME|$HOME|g")
+        if [ -n "$goroot" ] && [ -x "$goroot/bin/go" ]; then
+            GOROOT="$goroot"
+            export GOROOT
+            PATH="$GOROOT/bin-tools:$GOROOT/bin:$PATH"
+            export PATH
+        fi
+    fi
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+    echo "go not found on PATH, and could not resolve GOROOT from .envrc"
+    exit 1
+fi
+
 go version
 
 GO_MINOR=$(go version | grep -oE 'go1\.[0-9]+' | grep -oE '[0-9]+$')
-if [ -z "$GO_MINOR" ] || [ "$GO_MINOR" -lt 26 ]; then
-    echo "Go 1.26+ required, found: $(go version)"
+if [ -z "$GO_MINOR" ] || [ "$GO_MINOR" -lt 27 ]; then
+    echo "Go 1.27+ required, found: $(go version)"
     exit 1
 fi
 

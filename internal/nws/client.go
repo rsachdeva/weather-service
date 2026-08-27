@@ -2,7 +2,8 @@ package nws
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -112,7 +113,7 @@ func (c *Client) fetch(ctx context.Context, url string, dst any, logger *slog.Lo
 		if err != nil {
 			return fmt.Errorf("read body: %w", err)
 		}
-		logger.DebugContext(ctx, "nws raw response", "url", url, "status", resp.StatusCode, "body", json.RawMessage(body))
+		logger.DebugContext(ctx, "nws raw response", "url", url, "status", resp.StatusCode, "body", jsontext.Value(body))
 		if resp.StatusCode == http.StatusNotFound {
 			return forecast.ErrPointNotFound
 		}
@@ -132,7 +133,7 @@ func (c *Client) fetch(ctx context.Context, url string, dst any, logger *slog.Lo
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
+	if err := json.UnmarshalRead(resp.Body, dst); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil

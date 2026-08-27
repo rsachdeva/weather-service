@@ -1,7 +1,7 @@
 package api_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -99,7 +99,7 @@ func TestHandleGetWeather_Success(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var body map[string]string
-	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+	require.NoError(t, json.UnmarshalRead(rec.Body, &body))
 	require.Equal(t, "Mostly Cloudy", body["forecast"])
 	require.Equal(t, "moderate", body["temperature_classification"])
 	forecasterMock.AssertExpectations(t)
