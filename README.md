@@ -82,6 +82,25 @@ Response:
 - `temperature_classification` — `very hot` (>=100°F), `hot` (>=85°F), `cold` (<=55°F), `very cold` (<=30°F), or `moderate`
 - `periods[0]` is always the active NWS period for the location's local time — pre-dawn returns "Overnight", not "Today"
 
+### Optional: request file
+
+[`api.http`](api.http) holds the same endpoints with assertions attached, so a run
+reports pass/fail rather than printing a body to read. It covers what the curl
+examples above do not: all five `400` validation messages, the `404` for a valid
+coordinate outside NWS coverage, and the `405`/`404` chi returns for an unclaimed
+verb and an unrouted path. Not required — everything the project needs runs from
+`make`.
+
+The format is not tied to one editor. Any JetBrains IDE runs it from the gutter, and
+VS Code does too with the
+[httpYac](https://marketplace.visualstudio.com/items?itemName=anweber.vscode-httpyac)
+extension. Headless, for CI:
+
+```sh
+make run &
+npx httpyac send api.http --all
+```
+
 ## Rate limiting
 
 Per-IP rate limiter: 5 req/sec, burst of 10. Start the server first (`make run`), then fire 20 concurrent requests against `/health` (instant response, no NWS latency) to observe the burst limit:
@@ -123,4 +142,4 @@ make lint       # golangci-lint
 
 ## Status
 
-Version 0.3 — work in progress.
+Version 0.4 — work in progress.

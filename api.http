@@ -1,0 +1,154 @@
+# Requests plus assertions, in the JetBrains HTTP Client format (see README.md). Nothing is added to
+# go.mod, and nothing here is IDE-specific.
+# Start the service first with `make run` (or `make run-debug` for DEBUG logging).
+#
+# /weather calls the live National
+# Weather Service, so the 200 cases need network and their values change by the
+# hour -- every assertion below is on shape and on the fixed strings the handler
+# owns, never on a temperature. And there is nothing to seed: the only state the
+# service keeps is the per-IP rate limiter.
+
+@host = http://127.0.0.1:8080
+
+### Liveness. Answers before any middleware that could fail, so this is the first
+# thing to run when something looks wrong.
+#
+# Note the body is text, not JSON: the handler is a bare Fprintf that sets no
+# Content-Type, so Go sniffs the bytes and serves text/plain; charset=utf-8.
+GET {{host}}/health
+
+> {%
+    client.test("200 with the OK body", function () {
+        client.assert(response.status === 200, "status was " + response.status);
+        client.assert(response.body.trim() === "OK", "body was " + response.body);
+    });
+%}
+
+### A forecast for a point inside NWS coverage. Plano, TX -- the same coordinates
+# the README's curl example uses, so the two agree on what a worked example is.
+#
+# X-Request-Id is read by chi's RequestID middleware, which puts it in the context
+# for every log line this request produces. Sending a known one makes the server
+# log greppable: run this, then look for the same uuid in `make run` output.
+GET {{host}}/weather?lat=33.019844&lon=-96.698883
+Accept: application/json
+X-Request-Id: {{$uuid}}
+
+> {%
+    client.test("200 with both fields", function () {
+        client.assert(response.status === 200, "status was " + response.status);
+        client.assert(typeof response.body.forecast === "string", "forecast was " + response.body.forecast);
+        client.assert(response.body.forecast.length > 0, "forecast was empty");
+    });
+    client.test("classification is one classify() can return", function () {
+        // The five strings in internal/nws/client.go. Asserting membership rather
+        // than a value is the only stable check: the same coordinates return a
+        // different band in July than in January.
+        const bands = ["very hot", "hot", "moderate", "cold", "very cold"];
+        client.assert(bands.includes(response.body.temperature_classification),
+            "classification was " + response.body.temperature_classification);
+    });
+
+    client.global.set("known_classification", response.body.temperature_classification);
+%}
+
+### Both query parameters are required. This is the first of five 400s the handler
+# spells out; each has its own message, so the response says which check failed.
+GET {{host}}/weather
+Accept: application/json
+
+> {%
+    client.test("400 naming both parameters", function () {
+        client.assert(response.status === 400, "status was " + response.status);
+        client.assert(response.body.error === "lat and lon query parameters are required",
+            "error was " + response.body.error);
+    });
+%}
+
+### lat present but not a number. Go parses it explicitly with strconv.ParseFloat,
+# where a FastAPI service would derive the same 422 from a `lat: float` annotation.
+GET {{host}}/weather?lat=north&lon=-96.698883
+Accept: application/json
+
+> {%
+    client.test("400 for an unparseable lat", function () {
+        client.assert(response.status === 400, "status was " + response.status);
+        client.assert(response.body.error === "lat must be a valid number",
+            "error was " + response.body.error);
+    });
+%}
+
+### lon present but not a number. Separate from the lat case on purpose: the two
+# have separate messages, so a client can tell which coordinate it got wrong.
+GET {{host}}/weather?lat=33.019844&lon=west
+Accept: application/json
+
+> {%
+    client.test("400 for an unparseable lon", function () {
+        client.assert(response.status === 400, "status was " + response.status);
+        client.assert(response.body.error === "lon must be a valid number",
+            "error was " + response.body.error);
+    });
+%}
+
+### Range checks run after parsing, so a well-formed number can still be rejected.
+# 91 parses fine and is not a latitude.
+GET {{host}}/weather?lat=91&lon=-96.698883
+Accept: application/json
+
+> {%
+    client.test("400 naming the latitude range", function () {
+        client.assert(response.status === 400, "status was " + response.status);
+        client.assert(response.body.error === "lat must be between -90 and 90",
+            "error was " + response.body.error);
+    });
+%}
+
+### The longitude half of the same check.
+GET {{host}}/weather?lat=33.019844&lon=181
+Accept: application/json
+
+> {%
+    client.test("400 naming the longitude range", function () {
+        client.assert(response.status === 400, "status was " + response.status);
+        client.assert(response.body.error === "lon must be between -180 and 180",
+            "error was " + response.body.error);
+    });
+%}
+
+### A valid coordinate outside NWS coverage. London parses, passes both range
+# checks, and reaches the upstream call, which is where it fails: the NWS points
+# endpoint has no grid for it, the client returns forecast.ErrPointNotFound, and
+# the handler turns that one sentinel into this 404. Every other upstream failure
+# becomes a 500 instead.
+GET {{host}}/weather?lat=51.5074&lon=-0.1278
+Accept: application/json
+
+> {%
+    client.test("404 for a point off the grid", function () {
+        client.assert(response.status === 404, "status was " + response.status);
+        client.assert(response.body.error === "no NWS forecast available for this location",
+            "error was " + response.body.error);
+    });
+%}
+
+### Method routing. chi answers 405 for a verb no pattern on this path claims,
+# rather than falling through to the 404 an unrouted path gets.
+POST {{host}}/weather
+
+> {%
+    client.test("405 for a verb the route does not claim", function () {
+        client.assert(response.status === 405, "status was " + response.status);
+    });
+%}
+
+### An unrouted path. chi's default NotFound handler answers this, so the body is
+# its plain-text one rather than the {"error": ...} envelope respond.Error writes.
+# Worth seeing once: not every error from this service is JSON.
+GET {{host}}/forecast
+
+> {%
+    client.test("404 from the router, not the handler", function () {
+        client.assert(response.status === 404, "status was " + response.status);
+    });
+%}
